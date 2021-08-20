@@ -90,7 +90,7 @@ describe(Support.getTestDialectTeaser('Include'), () => {
           { name: 'Designers' },
           { name: 'Managers' }
         ]);
-        const groups = await Group.findAll(); 
+        const groups = await Group.findAll();
         await Company.bulkCreate([
           { name: 'Sequelize' },
           { name: 'Coca Cola' },
@@ -851,8 +851,8 @@ describe(Support.getTestDialectTeaser('Include'), () => {
     });
 
     it('should be possible to define a belongsTo include as required with child hasMany not required', async function() {
-      const Address = this.sequelize.define('Address', { 'active': DataTypes.BOOLEAN }), 
-        Street = this.sequelize.define('Street', { 'active': DataTypes.BOOLEAN }), 
+      const Address = this.sequelize.define('Address', { 'active': DataTypes.BOOLEAN }),
+        Street = this.sequelize.define('Street', { 'active': DataTypes.BOOLEAN }),
         User = this.sequelize.define('User', { 'username': DataTypes.STRING });
 
       // Associate
@@ -1330,6 +1330,63 @@ describe(Support.getTestDialectTeaser('Include'), () => {
         expect(product.Prices.length).to.be.ok;
       });
     });
+
+    /** BEGIN https://github.com/sequelize/sequelize/issues/11938 based test **/
+    it('should be possible to use nested.column references in top level where, with a top-level limit', async function() {
+      await this.fixtureA();
+
+      const products = await this.models.Product.findAll({
+        attributes: ['id', 'title'],
+        include: [
+          { model: this.models.Tag,
+            attributes: ['id', 'name'] }
+        ],
+        where: { '$Tags.name$': { [Op.eq]: 'D' } },
+        limit: 3,
+        order: [
+          [this.sequelize.col(`${this.models.Product.name}.id`), 'ASC']
+        ],
+        logging: console.log
+      });
+
+      expect(products.length).to.equal(0);
+
+      products.forEach(product => {
+        expect(product.Tags.length).to.be.ok;
+      });
+    });
+
+    it('should be possible to use nested.column references inside an OR in the top level where, with a top-level limit', async function() {
+      await this.fixtureA();
+      const products = await this.models.Product.findAll({
+        attributes: ['id', 'title'],
+        include: [
+          { model: this.models.Tag,
+            attributes: ['id', 'name'] }
+        ],
+        where: { [Op.or]:
+        [{ '$Tags.name$': { [Op.eq]: 'E' } },
+          { '$Tags.name$': { [Op.eq]: 'D' } }]
+        },
+        limit: 3,
+        order: [
+          [this.sequelize.col(`${this.models.Product.name}.id`), 'ASC']
+        ],
+        logging: console.log
+      });
+
+      expect(products.length).to.equal(0);
+
+      products.forEach(product => {
+        expect(product.Tags.length).to.be.ok;
+      });
+
+
+
+    });
+
+    /** END https://github.com/sequelize/sequelize/issues/11938 based test **/
+
 
     it('should be possible to have the primary key in attributes', async function() {
       const Parent = this.sequelize.define('Parent', {});

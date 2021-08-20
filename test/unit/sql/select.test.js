@@ -749,6 +749,106 @@ describe(Support.getTestDialectTeaser('SQL'), () => {
       });
     });
 
+    /** BEGIN https://github.com/sequelize/sequelize/issues/11938 based test */
+    it('multiple nested include (left outer join) with top level nested.column where', () => {
+      const User = Support.sequelize.define('User', {
+        name: DataTypes.STRING,
+        age: DataTypes.INTEGER
+      },
+      {
+        freezeTableName: true
+      });
+      const Post = Support.sequelize.define('Post', {
+        title: DataTypes.STRING
+      },
+      {
+        freezeTableName: true
+      });
+      const Comment = Support.sequelize.define('Comment', {
+        title: DataTypes.STRING
+      },
+      {
+        freezeTableName: true
+      });
+
+      const UserGroup = Support.sequelize.define('UserGroup', {
+        group_name: DataTypes.STRING
+      },
+      {
+        freezeTableName: true
+      });
+
+      User.Posts = User.hasMany(Post, { foreignKey: 'user_id' });
+      Post.Comments = Post.hasMany(Comment, { foreignKey: 'post_id' });
+      User.UserGroups = User.hasMany(UserGroup, { foreignKey: 'user_id' });
+
+      const the_sql = sql.selectQuery('User', {
+        model: User,
+        attributes: ['user_id'],
+        where: { '$Posts.Comment.title$': { [Op.eq]: 'Top Level Where and You' } },
+        limit: 10,
+        include: Model._validateIncludedElements({
+          include: [{
+            attributes: ['title'],
+            association: User.Posts,
+            include: [
+              {
+                model: Comment,
+                attributes: ['title']
+              }
+            ]
+          }, {
+            association: User.UserGroups,
+            attributes: ['group_name'],
+            required: false
+          }],
+          model: User
+        }).include
+
+      }, User);
+      //console.log("what it generated: ", the_sql)
+
+      expectsql(the_sql, {
+        default:
+        'SELECT [User].[user_id], [Posts].[id] AS [Posts.id], [Posts].[title] AS [Posts.title], [Posts->Comments].[id] AS [Posts.Comments.id], [Posts->Comments].[title] AS [Posts.Comments.title], [UserGroups].[id] AS [UserGroups.id], [UserGroups].[group_name] AS [UserGroups.group_name] FROM [User] AS [User] LEFT OUTER JOIN [Post] AS [Posts] ON [User].[id] = [Posts].[user_id] LEFT OUTER JOIN [Comment] AS [Posts->Comments] ON [Posts].[id] = [Posts->Comments].[post_id] LEFT OUTER JOIN [UserGroup] AS [UserGroups] ON [User].[id] = [UserGroups].[user_id] WHERE [Posts->Comment].[title] = \'Top Level Where and You\' LIMIT 10;',
+        postgres: 'SELECT "User"."user_id", "Posts"."id" AS "Posts.id", "Posts"."title" AS "Posts.title", "Posts->Comments"."id" AS "Posts.Comments.id", "Posts->Comments"."title" AS "Posts.Comments.title", "UserGroups"."id" AS "UserGroups.id", "UserGroups"."group_name" AS "UserGroups.group_name" FROM "User" AS "User" LEFT OUTER JOIN "Post" AS "Posts" ON "User"."id" = "Posts"."user_id" LEFT OUTER JOIN "Comment" AS "Posts->Comments" ON "Posts"."id" = "Posts->Comments"."post_id" LEFT OUTER JOIN "UserGroup" AS "UserGroups" ON "User"."id" = "UserGroups"."user_id" WHERE "Posts->Comment"."title" = \'Top Level Where and You\' LIMIT 10;'
+      });
+    });
+
+
+    it('single nested include (left outer join) with top level nested.column where', () => {
+
+      const Bar = Support.sequelize.define('Bar', { name: DataTypes.TEXT });
+      const Foo = Support.sequelize.define('Foo', { name: DataTypes.TEXT });
+
+      Foo.hasMany(Bar);
+
+      const the_sql = sql.selectQuery('Foo', {
+        model: Foo,
+        where: { '$Bars.name$': { [Op.eq]: 'booooo' } },
+        limit: 10,
+        include: Model._validateIncludedElements({
+          include: [{
+            model: Bar
+          }],
+          model: Foo
+        }).include
+
+      }, Foo);
+      //console.log("what it generated: ", the_sql)
+
+      expectsql(the_sql, {
+        default: 'SELECT [Foo].*, [Bars].[id] AS [Bars.id], [Bars].[name] AS [Bars.name], [Bars].[createdAt] AS [Bars.createdAt], [Bars].[updatedAt] AS [Bars.updatedAt], [Bars].[FooId] AS [Bars.FooId] FROM [Foo] AS [Foo] LEFT OUTER JOIN [Bars] AS [Bars] ON [Foo].[id] = [Bars].[FooId] WHERE [Bars].[name] = \'booooo\' LIMIT 10;',
+        postgres: 'SELECT "Foo".*, "Bars"."id" AS "Bars.id", "Bars"."name" AS "Bars.name", "Bars"."createdAt" AS "Bars.createdAt", "Bars"."updatedAt" AS "Bars.updatedAt", "Bars"."FooId" AS "Bars.FooId" FROM "Foo" AS "Foo" LEFT OUTER JOIN "Bars" AS "Bars" ON "Foo"."id" = "Bars"."FooId" WHERE "Bars"."name" = \'booooo\' LIMIT 10;'
+      });
+    });
+
+    /** END https://github.com/sequelize/sequelize/issues/11938 based test
+ *
+ */
+
+
+
   });
 
   describe('raw query', () => {
