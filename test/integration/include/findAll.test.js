@@ -1336,6 +1336,7 @@ describe(Support.getTestDialectTeaser('Include'), () => {
       await this.fixtureA();
 
       const products = await this.models.Product.findAll({
+        subQuery: false,
         attributes: ['id', 'title'],
         include: [
           { model: this.models.Tag,
@@ -1359,6 +1360,7 @@ describe(Support.getTestDialectTeaser('Include'), () => {
     it('should be possible to use nested.column references inside an OR in the top level where, with a top-level limit', async function() {
       await this.fixtureA();
       const products = await this.models.Product.findAll({
+        subQuery: false,
         attributes: ['id', 'title'],
         include: [
           { model: this.models.Tag,
@@ -1381,7 +1383,41 @@ describe(Support.getTestDialectTeaser('Include'), () => {
         expect(product.Tags.length).to.be.ok;
       });
 
+    });
 
+    it('should be possible to use nested.column references inside an OR in the top level where, with a top-level limit, with multiple associations', async function() {
+      await this.fixtureA();
+      const products = await this.models.Product.findAll({
+        subQuery: false,
+        attributes: ['id', 'title'],
+        include: [
+          { model: this.models.Company },
+          { model: this.models.Price },
+          { model: this.models.User, include: [{ model: this.models.GroupMember, as: 'Memberships' }] },
+          { model: this.models.Tag,
+            attributes: ['id', 'name'] }
+        ],
+        where: {
+          [Op.or]: [
+            {   [Op.or]:
+              [{ '$Tags.name$': { [Op.eq]: 'E' } },
+                { '$Tags.name$': { [Op.eq]: 'D' } }]
+            },
+            { '$User.Memberships.id$': { [Op.eq]: 4 } }
+          ]
+        },
+        limit: 3,
+        order: [
+          [this.sequelize.col(`${this.models.Product.name}.id`), 'ASC']
+        ],
+        logging: console.log
+      });
+
+      expect(products.length).to.equal(0);
+
+      products.forEach(product => {
+        expect(product.Tags.length).to.be.ok;
+      });
 
     });
 
